@@ -1,7 +1,7 @@
 Driver de la placa auxiliar Raspberry Pi — DSO
 
-Proyecto en desarrollo. Implementa /dev/leds y /dev/speaker;
-buttons pendiente.
+Proyecto en desarrollo. Implementa /dev/leds, /dev/speaker y
+/dev/buttons. Apertura exclusiva de buttons pendiente.
 
 Objetivo: un módulo de kernel con /dev/leds, /dev/speaker y /dev/buttons.
 Material del profesor y programas de prueba: carpeta superior, sin modificar.
@@ -64,3 +64,24 @@ Altavoz:
 
   Si una aplicación deja la salida activa, apagarla con:
     sudo sh -c 'printf "0" > /dev/speaker'
+
+Botones:
+  /dev/buttons es de solo lectura.
+  Botón 1: GPIO BCM 2 (Linux 514); botón 2: BCM 3 (Linux 515).
+  Cada lectura devuelve un carácter ASCII '1' o '2', en orden de llegada.
+  Si no hay pulsaciones, espera; CTRL+C puede interrumpir la espera.
+  Con O_NONBLOCK, una lectura sin datos devuelve EAGAIN.
+  Una lectura de cero bytes no espera ni consume pulsaciones.
+
+  Interrupciones por flanco de bajada, con hilo para guardar la pulsación
+  en una FIFO de 64 caracteres y despertar al lector. Si se llena,
+  se descartan las nuevas pulsaciones hasta que haya espacio.
+  Antirrebote independiente por botón: 50 ms por defecto.
+  Para cambiarlo al cargar:
+    sudo insmod driver_rpi.ko debounce_ms=80
+
+  Para usar la prueba del profesor, compilar desde la carpeta superior:
+    gcc lee_buttons.c -o /tmp/lee_buttons
+    sudo /tmp/lee_buttons
+  Leerá cinco pulsaciones y cerrará el dispositivo.
+  También se puede usar: sudo cat /dev/buttons

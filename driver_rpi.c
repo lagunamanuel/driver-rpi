@@ -1,10 +1,15 @@
 #include <linux/fs.h>
 #include <linux/gpio.h>
 #include <linux/init.h>
+#include <linux/interrupt.h>
+#include <linux/jiffies.h>
+#include <linux/kfifo.h>
 #include <linux/miscdevice.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/spinlock.h>
 #include <linux/uaccess.h>
+#include <linux/wait.h>
 
 #define GPIO_BASE 512
 #define LEDS_MASK 0x3f
@@ -103,6 +108,156 @@ static struct miscdevice speaker_device = {
 	.fops = &speaker_fops,
 };
 
+static unsigned int debounce_ms = 50;
+module_param(debounce_ms, uint, 0444);
+MODULE_PARM_DESC(debounce_ms, "Intervalo antirrebote en milisegundos");
+
+struct button {
+	unsigned int gpio;
+	int irq;
+	char key;
+	unsigned long last_press;
+};
+
+static struct button buttons[] = {
+	{ .gpio = GPIO_BASE + 2, .key = '1' },
+	{ .gpio = GPIO_BASE + 3, .key = '2' },
+};
+
+static DEFINE_KFIFO(buttons_fifo, char, 64);
+static DEFINE_SPINLOCK(buttons_lock);
+static DEFINE_MUTEX(buttons_read_mutex);
+static DECLARE_WAIT_QUEUE_HEAD(buttons_wait);
+
+static irqreturn_t button_irq(int irq, void *dev_id)
+{
+	struct button *button = dev_id;
+	unsigned long now = jiffies;
+
+	if (time_before(now, button->last_press + msecs_to_jiffies(debounce_ms)))
+		return IRQ_HANDLED;
+	button->last_press = now;
+	return IRQ_WAKE_THREAD;
+}
+
+static irqreturn_t button_thread(int irq, void *dev_id)
+{
+	struct button *button = dev_id;
+	unsigned long flags;
+	bool added;
+
+	spin_lock_irqsave(&buttons_lock, flags);
+	added = kfifo_put(&buttons_fifo, button->key);
+	spin_unlock_irqrestore(&buttons_lock, flags);
+	if (added)
+		wake_up_interruptible(&buttons_wait);
+	return IRQ_HANDLED;
+}
+
+static bool buttons_peek(char *key)
+{
+	unsigned long flags;
+	bool available;
+
+	spin_lock_irqsave(&buttons_lock, flags);
+	available = kfifo_peek(&buttons_fifo, key);
+	spin_unlock_irqrestore(&buttons_lock, flags);
+	return available;
+}
+
+static ssize_t buttons_read(struct file *file, char __user *buf,
+			    size_t count, loff_t *ppos)
+{
+	unsigned long flags;
+	char key;
+	ssize_t ret;
+
+	if (!count)
+		return 0;
+	if (file->f_flags & O_NONBLOCK) {
+		if (!mutex_trylock(&buttons_read_mutex))
+			return -EAGAIN;
+	} else if (mutex_lock_interruptible(&buttons_read_mutex)) {
+		return -ERESTARTSYS;
+	}
+
+	if (file->f_flags & O_NONBLOCK) {
+		if (!buttons_peek(&key)) {
+			ret = -EAGAIN;
+			goto unlock;
+		}
+	} else if (wait_event_interruptible(buttons_wait, buttons_peek(&key))) {
+		ret = -ERESTARTSYS;
+		goto unlock;
+	}
+
+	if (copy_to_user(buf, &key, 1)) {
+		ret = -EFAULT;
+		goto unlock;
+	}
+	spin_lock_irqsave(&buttons_lock, flags);
+	kfifo_skip(&buttons_fifo);
+	spin_unlock_irqrestore(&buttons_lock, flags);
+	*ppos += 1;
+	ret = 1;
+unlock:
+	mutex_unlock(&buttons_read_mutex);
+	return ret;
+}
+
+static const struct file_operations buttons_fops = {
+	.owner = THIS_MODULE,
+	.read = buttons_read,
+};
+
+static struct miscdevice buttons_device = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "buttons",
+	.fops = &buttons_fops,
+};
+
+static int buttons_init(void)
+{
+	int i, ret;
+
+	for (i = 0; i < ARRAY_SIZE(buttons); i++) {
+		ret = gpio_request_one(buttons[i].gpio, GPIOF_IN,
+				       "driver_rpi_button");
+		if (ret)
+			goto free_previous;
+		ret = gpio_to_irq(buttons[i].gpio);
+		if (ret < 0)
+			goto free_current;
+		buttons[i].irq = ret;
+		buttons[i].last_press = jiffies - msecs_to_jiffies(debounce_ms);
+		ret = request_threaded_irq(buttons[i].irq, button_irq, button_thread,
+					   IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+					   "driver_rpi_button", &buttons[i]);
+		if (ret)
+			goto free_current;
+	}
+	return 0;
+
+free_current:
+	gpio_free(buttons[i].gpio);
+free_previous:
+	while (i--) {
+		free_irq(buttons[i].irq, &buttons[i]);
+		gpio_free(buttons[i].gpio);
+	}
+	return ret;
+}
+
+static void buttons_cleanup(void)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(buttons); i++) {
+		free_irq(buttons[i].irq, &buttons[i]);
+		gpio_free(buttons[i].gpio);
+	}
+}
+
 static int __init driver_rpi_init(void)
 {
 	int i, ret;
@@ -117,18 +272,28 @@ static int __init driver_rpi_init(void)
 			       "driver_rpi_speaker");
 	if (ret)
 		goto free_leds;
-	ret = misc_register(&leds_device);
+	ret = buttons_init();
 	if (ret)
 		goto free_speaker;
+	ret = misc_register(&leds_device);
+	if (ret)
+		goto free_buttons;
 	ret = misc_register(&speaker_device);
 	if (ret)
 		goto deregister_leds;
+	ret = misc_register(&buttons_device);
+	if (ret)
+		goto deregister_speaker;
 
 	pr_info("driver_rpi: cargado\n");
 	return 0;
 
+deregister_speaker:
+	misc_deregister(&speaker_device);
 deregister_leds:
 	misc_deregister(&leds_device);
+free_buttons:
+	buttons_cleanup();
 free_speaker:
 	gpio_free(GPIO_SPEAKER);
 free_leds:
@@ -141,8 +306,10 @@ static void __exit driver_rpi_exit(void)
 {
 	int i;
 
+	misc_deregister(&buttons_device);
 	misc_deregister(&speaker_device);
 	misc_deregister(&leds_device);
+	buttons_cleanup();
 	gpio_set_value(GPIO_SPEAKER, 0);
 	gpio_free(GPIO_SPEAKER);
 	for (i = 0; i < ARRAY_SIZE(led_gpios); i++) {

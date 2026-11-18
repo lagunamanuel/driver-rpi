@@ -35,7 +35,7 @@
 - [x] 3. Implementar /dev/speaker: GPIO de salida, escritura de un byte
   comparado con ASCII '0', sin limitar escrituras sucesivas.
   Documentar y comprobar compilación. Commit del altavoz.
-- [ ] 4. Implementar /dev/buttons con FIFO, sincronización, IRQ con hilo,
+- [x] 4. Implementar /dev/buttons con FIFO, sincronización, IRQ con hilo,
   antirrebote configurable y lectura bloqueante interrumpible.
   Comprobar compilación y documentar el uso de `lee_buttons.c`.
   Commit de lectura de botones.
@@ -79,3 +79,18 @@ Comprobados `make W=1`, `modinfo` y `make clean` contra el kernel del PC
 Compilados prueba_speaker2.c y sonidoTetris.c con -pthread, sin modificarlos
 ni ejecutarlos. No se han añadido tests ni cargado el módulo en el PC.
 Pendiente comprobar los sonidos en la Raspberry.
+
+Entrega 4: /dev/buttons devuelve un carácter por lectura ('1' o '2').
+GPIO BCM 2 y 3, según 2_shell_io/sysfs_interface.sh.
+IRQ por flanco de bajada con filtrado temporal independiente por botón;
+el hilo de IRQ guarda las pulsaciones en una kfifo de 64 elementos y
+despierta la cola de espera. debounce_ms=50, configurable al cargar.
+Spinlock para la FIFO y mutex para serializar lectores, incluso si
+comparten descriptor; copy_to_user se ejecuta fuera del spinlock y no
+consume la pulsación si falla. Lecturas vacías bloqueantes e interrumpibles;
+O_NONBLOCK devuelve EAGAIN. FIFO llena: descartar nuevas pulsaciones.
+Liberación de IRQ antes del GPIO, también ante inicialización parcial.
+Comprobados `make W=1`, `modinfo` (incluido debounce_ms) y `make clean`
+contra 7.3.3-300.fc45.x86_64, más compilación de lee_buttons.c sin cambios.
+BTF omitido por falta de vmlinux. Sin tests nuevos ni carga del módulo.
+Pendiente prueba física y apertura exclusiva (entrega 5).
