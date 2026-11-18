@@ -29,7 +29,7 @@
   compilación, instalación, descarga y limpieza; `.gitignore` de Kbuild.
   Actualizar `readme.txt`, comprobar compilación si hay cabeceras adecuadas
   y registrar explícitamente cualquier limitación. Commit de la base.
-- [ ] 2. Implementar /dev/leds: seis GPIO según material, read de un byte,
+- [x] 2. Implementar /dev/leds: seis GPIO según material, read de un byte,
   write con cuatro operaciones y protección de actualizaciones.
   Documentar el uso y comprobar compilación. Commit de LEDs.
 - [ ] 3. Implementar /dev/speaker: GPIO de salida, escritura de un byte
@@ -58,3 +58,14 @@ Kbuild omite BTF por no disponer de vmlinux. No se ha cargado el módulo.
 Pendiente compilar y comprobar carga/descarga en la Raspberry.
 Se mantiene el trabajo en el repositorio creado y se pausa por entregas,
 sin tests nuevos, según lo solicitado por el usuario.
+
+Entrega 2: /dev/leds con estado binario de seis bits, cuatro operaciones
+de escritura y mutex para lecturas y actualizaciones del estado.
+Pines y orden tomados de 1_leds_device_driver/3_class_dev.c.
+Reserva de GPIO antes de publicar el dispositivo, liberación parcial ante
+errores y apagado al descargar. Sin tests nuevos.
+Comprobados `make W=1`, `modinfo` y `make clean` contra el kernel del PC
+7.3.3-300.fc45.x86_64; BTF omitido por falta de vmlinux.
+Se eliminó la referencia a no_llseek, retirada en kernels modernos;
+se deja llseek sin definir como indica la documentación del kernel.
+Pendiente validar en la Raspberry, incluida la base GPIO 512.
