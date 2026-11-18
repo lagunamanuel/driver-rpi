@@ -1,6 +1,7 @@
 Driver de la placa auxiliar Raspberry Pi — DSO
 
-Proyecto en desarrollo. Implementa /dev/leds; speaker y buttons pendientes.
+Proyecto en desarrollo. Implementa /dev/leds y /dev/speaker;
+buttons pendiente.
 
 Objetivo: un módulo de kernel con /dev/leds, /dev/speaker y /dev/buttons.
 Material del profesor y programas de prueba: carpeta superior, sin modificar.
@@ -46,3 +47,20 @@ LEDs:
     sudo sh -c 'printf "\201" > /dev/leds'  # apagar LED 1
     sudo sh -c 'printf "\302" > /dev/leds'  # invertir LED 2
     sudo od -An -t x1 /dev/leds
+
+Altavoz:
+  /dev/speaker es de solo escritura, conectado al GPIO BCM 4
+  (GPIO Linux 516 con la base actual).
+  Cada escritura consume un byte: ASCII '0' apaga, cualquier otro activa.
+  Se pueden hacer escrituras sucesivas con el mismo descriptor.
+  La salida empieza a cero y se apaga al descargar el módulo.
+  El driver no genera tonos: la aplicación debe alternar '0' y '1'.
+
+  Para usar los programas del profesor desde la carpeta superior:
+    gcc prueba_speaker2.c -o /tmp/prueba_speaker2 -pthread
+    sudo /tmp/prueba_speaker2
+    gcc sonidoTetris.c -o /tmp/sonidoTetris -pthread
+    sudo /tmp/sonidoTetris
+
+  Si una aplicación deja la salida activa, apagarla con:
+    sudo sh -c 'printf "0" > /dev/speaker'

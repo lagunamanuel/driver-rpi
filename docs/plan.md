@@ -32,7 +32,7 @@
 - [x] 2. Implementar /dev/leds: seis GPIO según material, read de un byte,
   write con cuatro operaciones y protección de actualizaciones.
   Documentar el uso y comprobar compilación. Commit de LEDs.
-- [ ] 3. Implementar /dev/speaker: GPIO de salida, escritura de un byte
+- [x] 3. Implementar /dev/speaker: GPIO de salida, escritura de un byte
   comparado con ASCII '0', sin limitar escrituras sucesivas.
   Documentar y comprobar compilación. Commit del altavoz.
 - [ ] 4. Implementar /dev/buttons con FIFO, sincronización, IRQ con hilo,
@@ -69,3 +69,13 @@ Comprobados `make W=1`, `modinfo` y `make clean` contra el kernel del PC
 Se eliminó la referencia a no_llseek, retirada en kernels modernos;
 se deja llseek sin definir como indica la documentación del kernel.
 Pendiente validar en la Raspberry, incluida la base GPIO 512.
+
+Entrega 3: /dev/speaker, solo escritura, GPIO BCM 4 (Linux 516),
+según 2_shell_io/sysfs_interface.sh. ASCII '0' desactiva y cualquier
+otro byte activa, sin limitar escrituras sucesivas por descriptor.
+Salida inicial y final a cero; liberación de recursos ante errores.
+Comprobados `make W=1`, `modinfo` y `make clean` contra el kernel del PC
+7.3.3-300.fc45.x86_64; BTF omitido por falta de vmlinux.
+Compilados prueba_speaker2.c y sonidoTetris.c con -pthread, sin modificarlos
+ni ejecutarlos. No se han añadido tests ni cargado el módulo en el PC.
+Pendiente comprobar los sonidos en la Raspberry.

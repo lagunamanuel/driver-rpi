@@ -8,6 +8,7 @@
 
 #define GPIO_BASE 512
 #define LEDS_MASK 0x3f
+#define GPIO_SPEAKER (GPIO_BASE + 4)
 
 static const unsigned int led_gpios[] = {
 	GPIO_BASE + 9, GPIO_BASE + 10, GPIO_BASE + 11,
@@ -76,6 +77,32 @@ static struct miscdevice leds_device = {
 	.fops = &leds_fops,
 };
 
+static ssize_t speaker_write(struct file *file, const char __user *buf,
+			     size_t count, loff_t *ppos)
+{
+	char value;
+
+	if (!count)
+		return 0;
+	if (copy_from_user(&value, buf, 1))
+		return -EFAULT;
+
+	gpio_set_value(GPIO_SPEAKER, value != '0');
+	*ppos += 1;
+	return 1;
+}
+
+static const struct file_operations speaker_fops = {
+	.owner = THIS_MODULE,
+	.write = speaker_write,
+};
+
+static struct miscdevice speaker_device = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "speaker",
+	.fops = &speaker_fops,
+};
+
 static int __init driver_rpi_init(void)
 {
 	int i, ret;
@@ -86,13 +113,24 @@ static int __init driver_rpi_init(void)
 		if (ret)
 			goto free_leds;
 	}
-	ret = misc_register(&leds_device);
+	ret = gpio_request_one(GPIO_SPEAKER, GPIOF_OUT_INIT_LOW,
+			       "driver_rpi_speaker");
 	if (ret)
 		goto free_leds;
+	ret = misc_register(&leds_device);
+	if (ret)
+		goto free_speaker;
+	ret = misc_register(&speaker_device);
+	if (ret)
+		goto deregister_leds;
 
 	pr_info("driver_rpi: cargado\n");
 	return 0;
 
+deregister_leds:
+	misc_deregister(&leds_device);
+free_speaker:
+	gpio_free(GPIO_SPEAKER);
 free_leds:
 	while (i--)
 		gpio_free(led_gpios[i]);
@@ -103,7 +141,10 @@ static void __exit driver_rpi_exit(void)
 {
 	int i;
 
+	misc_deregister(&speaker_device);
 	misc_deregister(&leds_device);
+	gpio_set_value(GPIO_SPEAKER, 0);
+	gpio_free(GPIO_SPEAKER);
 	for (i = 0; i < ARRAY_SIZE(led_gpios); i++) {
 		gpio_set_value(led_gpios[i], 0);
 		gpio_free(led_gpios[i]);
