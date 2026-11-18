@@ -25,7 +25,7 @@
 ## Entregas
 
 - [x] 0. Crear repositorio privado con descripción y pasos acordados.
-- [ ] 1. Crear `driver_rpi.c` con init/exit y metadatos; `Makefile` con
+- [x] 1. Crear `driver_rpi.c` con init/exit y metadatos; `Makefile` con
   compilación, instalación, descarga y limpieza; `.gitignore` de Kbuild.
   Actualizar `readme.txt`, comprobar compilación si hay cabeceras adecuadas
   y registrar explícitamente cualquier limitación. Commit de la base.
@@ -48,3 +48,13 @@
 
 No añadir programas de prueba. Cada entrega requiere comprobar el diff
 y subir su commit; las pruebas físicas pendientes se indicarán como tales.
+
+## Registro
+
+Entrega 1: módulo base, Makefile, .gitignore y documentación.
+Comprobado `make W=1`, `modinfo driver_rpi.ko` y `make clean` contra
+7.3.3-300.fc45.x86_64, en copia temporal sin espacios. Compilación correcta;
+Kbuild omite BTF por no disponer de vmlinux. No se ha cargado el módulo.
+Pendiente compilar y comprobar carga/descarga en la Raspberry.
+Se mantiene el trabajo en el repositorio creado y se pausa por entregas,
+sin tests nuevos, según lo solicitado por el usuario.
