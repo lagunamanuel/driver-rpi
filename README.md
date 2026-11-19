@@ -55,6 +55,13 @@ profesor y seguir `readme.txt`: esos programas no están en el repositorio.
 
 El ZIP contiene solo `driver_rpi.c`, `Makefile` y `readme.txt`.
 El instalador y este documento son auxiliares y quedan fuera de la entrega.
+Para generarlo desde el último commit del repositorio actualizado:
+
+```sh
+git archive --format=zip --output=driver-rpi.zip HEAD driver_rpi.c Makefile readme.txt
+```
+
+No usar el ZIP completo de GitHub como entrega, porque incluye los auxiliares.
 
 La compilación se ha comprobado en el PC; la validación del hardware y del
 comportamiento bloqueante queda pendiente en la Raspberry.

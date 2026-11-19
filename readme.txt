@@ -3,14 +3,16 @@ Driver de la placa auxiliar Raspberry Pi — DSO
 Proyecto en desarrollo. Implementa /dev/leds, /dev/speaker y
 /dev/buttons con apertura exclusiva. Pendiente validación en la Raspberry.
 
-Objetivo: un módulo de kernel con /dev/leds, /dev/speaker y /dev/buttons.
-Material del profesor y programas de prueba: carpeta superior, sin modificar.
-
-Pasos acordados: docs/plan.md.
+Módulo de kernel para Linux 6.6 del laboratorio.
+Los programas de prueba del profesor se proporcionan por separado.
 
 Ficheros:
   driver_rpi.c  Código del módulo.
   Makefile      Compilación, carga, descarga y limpieza.
+  readme.txt    Descripción y uso.
+
+leds y speaker se registran como dispositivos misc. buttons usa un cdev
+independiente para que su open bloqueante no retenga el mutex global de misc.
 
 Uso en la Raspberry Pi, con las cabeceras de su kernel instaladas:
   make
@@ -56,7 +58,7 @@ Altavoz:
   La salida empieza a cero y se apaga al descargar el módulo.
   El driver no genera tonos: la aplicación debe alternar '0' y '1'.
 
-  Para usar los programas del profesor desde la carpeta superior:
+  Para usar los programas del profesor, desde la carpeta con sus fuentes:
     gcc prueba_speaker2.c -o /tmp/prueba_speaker2 -pthread
     sudo /tmp/prueba_speaker2
     gcc sonidoTetris.c -o /tmp/sonidoTetris -pthread
@@ -80,7 +82,7 @@ Botones:
   Para cambiarlo al cargar:
     sudo insmod driver_rpi.ko debounce_ms=80
 
-  Para usar la prueba del profesor, compilar desde la carpeta superior:
+  Para usar la prueba del profesor, compilar desde la carpeta con su fuente:
     gcc lee_buttons.c -o /tmp/lee_buttons
     sudo /tmp/lee_buttons
   Leerá cinco pulsaciones y cerrará el dispositivo.
