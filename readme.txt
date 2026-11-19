@@ -1,7 +1,7 @@
 Driver de la placa auxiliar Raspberry Pi — DSO
 
 Proyecto en desarrollo. Implementa /dev/leds, /dev/speaker y
-/dev/buttons. Apertura exclusiva de buttons pendiente.
+/dev/buttons con apertura exclusiva. Pendiente validación en la Raspberry.
 
 Objetivo: un módulo de kernel con /dev/leds, /dev/speaker y /dev/buttons.
 Material del profesor y programas de prueba: carpeta superior, sin modificar.
@@ -85,3 +85,14 @@ Botones:
     sudo /tmp/lee_buttons
   Leerá cinco pulsaciones y cerrará el dispositivo.
   También se puede usar: sudo cat /dev/buttons
+
+  Apertura exclusiva: solo se permite una apertura simultánea.
+  Si está ocupado, open espera hasta que se cierre; CTRL+C puede
+  interrumpir esa espera. Con O_NONBLOCK, open devuelve EBUSY.
+  El acceso se libera al cerrar el último descriptor de esa apertura,
+  también si el proceso termina. Cambiar O_NONBLOCK no impide liberarlo.
+
+  Para comprobarlo con la prueba del profesor:
+    sudo /tmp/lee_buttons dos
+  Se crean dos procesos. El segundo espera a que el primero lea cinco
+  pulsaciones y cierre; después puede leer sus cinco pulsaciones.

@@ -39,7 +39,7 @@
   antirrebote configurable y lectura bloqueante interrumpible.
   Comprobar compilación y documentar el uso de `lee_buttons.c`.
   Commit de lectura de botones.
-- [ ] 5. Añadir apertura exclusiva con semáforo, espera interrumpible,
+- [x] 5. Añadir apertura exclusiva con semáforo, espera interrumpible,
   -EBUSY con O_NONBLOCK y liberación en release. Comprobar compilación.
   Commit de exclusividad.
 - [ ] 6. Revisar contra el enunciado, completar `readme.txt` y comprobar
@@ -94,3 +94,14 @@ Comprobados `make W=1`, `modinfo` (incluido debounce_ms) y `make clean`
 contra 7.3.3-300.fc45.x86_64, más compilación de lee_buttons.c sin cambios.
 BTF omitido por falta de vmlinux. Sin tests nuevos ni carga del módulo.
 Pendiente prueba física y apertura exclusiva (entrega 5).
+
+Entrega 5: apertura exclusiva mediante semáforo inicializado a 1.
+open bloqueante usa down_interruptible y devuelve ERESTARTSYS ante señal;
+con O_NONBLOCK usa down_trylock y devuelve EBUSY si está ocupado.
+release libera siempre el semáforo, independientemente de los flags.
+Inicialización con sema_init para evitar diferencias de firma de
+DEFINE_SEMAPHORE entre versiones de kernel.
+Comprobados `make W=1`, `modinfo` y `make clean` contra
+7.3.4-300.fc45.x86_64, además de compilar lee_buttons.c sin cambios.
+BTF omitido por falta de vmlinux. Sin tests nuevos ni carga en el PC.
+Pendiente comprobar exclusividad, señales y O_NONBLOCK en la Raspberry.

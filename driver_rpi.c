@@ -7,6 +7,7 @@
 #include <linux/miscdevice.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/semaphore.h>
 #include <linux/spinlock.h>
 #include <linux/uaccess.h>
 #include <linux/wait.h>
@@ -128,6 +129,24 @@ static DEFINE_KFIFO(buttons_fifo, char, 64);
 static DEFINE_SPINLOCK(buttons_lock);
 static DEFINE_MUTEX(buttons_read_mutex);
 static DECLARE_WAIT_QUEUE_HEAD(buttons_wait);
+static struct semaphore buttons_open_sem;
+
+static int buttons_open(struct inode *inode, struct file *file)
+{
+	if (file->f_flags & O_NONBLOCK) {
+		if (down_trylock(&buttons_open_sem))
+			return -EBUSY;
+	} else if (down_interruptible(&buttons_open_sem)) {
+		return -ERESTARTSYS;
+	}
+	return 0;
+}
+
+static int buttons_release(struct inode *inode, struct file *file)
+{
+	up(&buttons_open_sem);
+	return 0;
+}
 
 static irqreturn_t button_irq(int irq, void *dev_id)
 {
@@ -207,6 +226,8 @@ unlock:
 
 static const struct file_operations buttons_fops = {
 	.owner = THIS_MODULE,
+	.open = buttons_open,
+	.release = buttons_release,
 	.read = buttons_read,
 };
 
@@ -220,6 +241,7 @@ static int buttons_init(void)
 {
 	int i, ret;
 
+	sema_init(&buttons_open_sem, 1);
 	for (i = 0; i < ARRAY_SIZE(buttons); i++) {
 		ret = gpio_request_one(buttons[i].gpio, GPIOF_IN,
 				       "driver_rpi_button");
