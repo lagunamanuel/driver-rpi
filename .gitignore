@@ -8,3 +8,4 @@ modules.order
 .tmp_versions/
 /driver-rpi.zip
 *.zip
+!/driver-rpi-entrega.zip
