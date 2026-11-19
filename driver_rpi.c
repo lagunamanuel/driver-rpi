@@ -1,3 +1,6 @@
+#include <linux/cdev.h>
+#include <linux/device.h>
+#include <linux/err.h>
 #include <linux/fs.h>
 #include <linux/gpio.h>
 #include <linux/init.h>
@@ -231,11 +234,51 @@ static const struct file_operations buttons_fops = {
 	.read = buttons_read,
 };
 
-static struct miscdevice buttons_device = {
-	.minor = MISC_DYNAMIC_MINOR,
-	.name = "buttons",
-	.fops = &buttons_fops,
-};
+static dev_t buttons_dev;
+static struct cdev buttons_cdev;
+static struct class *buttons_class;
+
+static int buttons_register(void)
+{
+	struct device *device;
+	int ret;
+
+	ret = alloc_chrdev_region(&buttons_dev, 0, 1, "buttons");
+	if (ret)
+		return ret;
+	cdev_init(&buttons_cdev, &buttons_fops);
+	buttons_cdev.owner = THIS_MODULE;
+	ret = cdev_add(&buttons_cdev, buttons_dev, 1);
+	if (ret)
+		goto unregister_region;
+	buttons_class = class_create("driver_rpi");
+	if (IS_ERR(buttons_class)) {
+		ret = PTR_ERR(buttons_class);
+		goto delete_cdev;
+	}
+	device = device_create(buttons_class, NULL, buttons_dev, NULL, "buttons");
+	if (IS_ERR(device)) {
+		ret = PTR_ERR(device);
+		goto destroy_class;
+	}
+	return 0;
+
+destroy_class:
+	class_destroy(buttons_class);
+delete_cdev:
+	cdev_del(&buttons_cdev);
+unregister_region:
+	unregister_chrdev_region(buttons_dev, 1);
+	return ret;
+}
+
+static void buttons_unregister(void)
+{
+	device_destroy(buttons_class, buttons_dev);
+	class_destroy(buttons_class);
+	cdev_del(&buttons_cdev);
+	unregister_chrdev_region(buttons_dev, 1);
+}
 
 static int buttons_init(void)
 {
@@ -303,7 +346,7 @@ static int __init driver_rpi_init(void)
 	ret = misc_register(&speaker_device);
 	if (ret)
 		goto deregister_leds;
-	ret = misc_register(&buttons_device);
+	ret = buttons_register();
 	if (ret)
 		goto deregister_speaker;
 
@@ -328,7 +371,7 @@ static void __exit driver_rpi_exit(void)
 {
 	int i;
 
-	misc_deregister(&buttons_device);
+	buttons_unregister();
 	misc_deregister(&speaker_device);
 	misc_deregister(&leds_device);
 	buttons_cleanup();
