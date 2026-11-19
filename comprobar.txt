@@ -1,0 +1,143 @@
+Comprobación del sistema y del driver
+
+Ejecutar en la Raspberry Pi. Los resultados indicados son los esperados.
+Este documento es auxiliar y no forma parte del ZIP de entrega.
+
+Datos del sistema:
+
+  uname -r
+  uname -m
+  cat /proc/device-tree/model
+  sudo cat /sys/kernel/debug/gpio
+  ls -ld "/lib/modules/$(uname -r)/build"
+
+Muestran el kernel, la arquitectura, el modelo, los GPIO y la ruta de
+cabeceras. Conservar las salidas, incluidos los posibles errores.
+Antes de cargar, comprobar el cableado y que GPIO_BASE en driver_rpi.c
+coincida con la base del controlador GPIO. El valor actual es 512.
+
+Cargar el driver, desde la carpeta del repositorio:
+
+  git pull --ff-only
+  bash instalar.sh
+
+Aceptar la carga solo después de comprobar placa y GPIO.
+Si faltan herramientas o cabeceras, el script informa y se detiene.
+No configura la carga automática al reiniciar.
+
+Comprobar la carga:
+
+  lsmod | grep driver_rpi
+  ls -l /dev/leds /dev/speaker /dev/buttons
+  sudo dmesg | tail
+
+Debe aparecer el módulo, deben existir los tres dispositivos y el log
+debe mostrar "driver_rpi: cargado". Esto solo confirma la carga.
+
+Probar los LEDs:
+
+  sudo sh -c 'printf "\001" > /dev/leds'
+  sudo od -An -t x1 /dev/leds
+
+Solo el primer LED encendido. La lectura debe mostrar 01.
+
+  sudo sh -c 'printf "\102" > /dev/leds'
+  sudo od -An -t x1 /dev/leds
+
+Se añade el segundo LED sin apagar el primero. Lectura: 03.
+
+  sudo sh -c 'printf "\201" > /dev/leds'
+  sudo od -An -t x1 /dev/leds
+
+Se apaga el primero y se conserva el segundo. Lectura: 02.
+
+  sudo sh -c 'printf "\302" > /dev/leds'
+  sudo od -An -t x1 /dev/leds
+
+Se invierte el segundo y quedan todos apagados. Lectura: 00.
+
+  sudo sh -c 'printf "\077" > /dev/leds'
+  sudo od -An -t x1 /dev/leds
+
+Los seis LEDs encendidos. Lectura: 3f.
+
+  sudo sh -c 'printf "\000" > /dev/leds'
+
+Todos apagados.
+
+Probar sonido, desde la carpeta con los programas del profesor:
+
+  gcc sonidoTetris.c -o sonidoTetris -pthread
+  sudo ./sonidoTetris
+
+Debe sonar la melodía de Tetris.
+
+  gcc prueba_speaker2.c -o prueba_speaker2 -pthread
+  sudo ./prueba_speaker2
+
+Debe sonar otra secuencia musical. Un único '1' escrito en speaker no
+genera un tono continuo: los programas alternan la salida.
+Para dejar el altavoz apagado al terminar:
+
+  sudo sh -c 'printf "0" > /dev/speaker'
+
+Probar botones, desde la carpeta con lee_buttons.c:
+
+  gcc lee_buttons.c -o lee_buttons
+  sudo ./lee_buttons
+
+Espera hasta que pulses botones. Cada pulsación debe mostrar '1' o '2'
+y el PID del lector. Tras cinco pulsaciones, cierra y termina.
+Una pulsación normal no debe generar varios caracteres por rebotes.
+No se esperan mensajes de pulsaciones ni de sonido en dmesg.
+
+Comprobar apertura exclusiva:
+
+  sudo ./lee_buttons dos
+
+Se crean dos procesos con PID distintos. Uno lee cinco pulsaciones;
+el otro espera para abrir. Cuando el primero cierra, el segundo puede
+leer sus cinco pulsaciones. No deben repartirse las lecturas entre ambos.
+
+Comprobar espera e interrupción, sin la aplicación anterior abierta:
+
+  sudo cat /dev/buttons
+
+Lee las pulsaciones que estuvieran guardadas y luego espera.
+Al pulsar, aparecen '1' y '2'. CTRL+C debe terminar el comando.
+
+Comprobar apertura no bloqueante:
+
+En una terminal, mantener abierto:
+
+  sudo cat /dev/buttons
+
+En otra terminal:
+
+  sudo dd if=/dev/buttons iflag=nonblock bs=1 count=1 status=none
+
+Debe fallar inmediatamente por dispositivo ocupado (EBUSY).
+Cerrar el cat con CTRL+C, sin pulsaciones pendientes, y repetir dd.
+Ahora debe fallar por falta temporal de datos (EAGAIN), sin quedarse
+esperando. Si había una pulsación pendiente, leerá ese carácter.
+
+Cambiar el antirrebote, desde la carpeta del repositorio:
+
+Cerrar primero todos los lectores y programas de sonido.
+
+  sudo rmmod driver_rpi
+  bash instalar.sh debounce_ms=80
+  cat /sys/module/driver_rpi/parameters/debounce_ms
+
+Debe mostrar 80. El valor por defecto es 50 milisegundos.
+Repetir la prueba de botones para comprobar que no duplica pulsaciones.
+
+Descargar:
+
+  sudo rmmod driver_rpi
+  sudo dmesg | tail
+  ls -l /dev/leds /dev/speaker /dev/buttons
+
+Debe aparecer "driver_rpi: descargado", apagarse las salidas y desaparecer
+los dispositivos. ls debe indicar que ya no existen.
+Si rmmod indica que está en uso, cerrar los procesos que lo tienen abierto.
