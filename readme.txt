@@ -1,4 +1,4 @@
-Driver de la placa auxiliar Raspberry Pi
+Driver de la placa auxiliar Raspberry Pi - Manuel Laguna Martínez y Salvador Bustamante Garnica
 
 Módulo de kernel que controla seis LEDs, un altavoz y dos botones.
 
