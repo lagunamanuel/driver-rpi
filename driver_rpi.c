@@ -15,6 +15,7 @@
 #include <linux/uaccess.h>
 #include <linux/wait.h>
 
+// Base que se suma al número BCM de cada pin.
 #define GPIO_BASE 512
 #define LEDS_MASK 0x3f
 #define GPIO_SPEAKER (GPIO_BASE + 4)
@@ -52,6 +53,7 @@ static ssize_t leds_write(struct file *file, const char __user *buf,
 
 	mask = command & LEDS_MASK;
 	mutex_lock(&leds_mutex);
+	// Los dos bits superiores eligen entre asignar, encender, apagar o invertir.
 	switch (command >> 6) {
 	case 0:
 		leds_state = mask;
@@ -96,6 +98,7 @@ static ssize_t speaker_write(struct file *file, const char __user *buf,
 	if (copy_from_user(&value, buf, 1))
 		return -EFAULT;
 
+	// La aplicación genera el sonido alternando esta salida.
 	gpio_set_value(GPIO_SPEAKER, value != '0');
 	*ppos += 1;
 	return 1;
@@ -136,6 +139,7 @@ static struct semaphore buttons_open_sem;
 
 static int buttons_open(struct inode *inode, struct file *file)
 {
+	// El semáforo queda ocupado hasta que se cierre esta apertura.
 	if (file->f_flags & O_NONBLOCK) {
 		if (down_trylock(&buttons_open_sem))
 			return -EBUSY;
@@ -156,6 +160,7 @@ static irqreturn_t button_irq(int irq, void *dev_id)
 	struct button *button = dev_id;
 	unsigned long now = jiffies;
 
+	// Ignora los flancos demasiado próximos a la última pulsación aceptada.
 	if (time_before(now, button->last_press + msecs_to_jiffies(debounce_ms)))
 		return IRQ_HANDLED;
 	button->last_press = now;
@@ -168,6 +173,7 @@ static irqreturn_t button_thread(int irq, void *dev_id)
 	unsigned long flags;
 	bool added;
 
+	// El hilo guarda la pulsación y despierta al lector si pudo añadirla.
 	spin_lock_irqsave(&buttons_lock, flags);
 	added = kfifo_put(&buttons_fifo, button->key);
 	spin_unlock_irqrestore(&buttons_lock, flags);
@@ -196,6 +202,7 @@ static ssize_t buttons_read(struct file *file, char __user *buf,
 
 	if (!count)
 		return 0;
+	// Serializa las lecturas, incluso si varios hilos comparten descriptor.
 	if (file->f_flags & O_NONBLOCK) {
 		if (!mutex_trylock(&buttons_read_mutex))
 			return -EAGAIN;
@@ -213,6 +220,7 @@ static ssize_t buttons_read(struct file *file, char __user *buf,
 		goto unlock;
 	}
 
+	// Conserva la pulsación en la FIFO si falla la copia al usuario.
 	if (copy_to_user(buf, &key, 1)) {
 		ret = -EFAULT;
 		goto unlock;
@@ -243,6 +251,7 @@ static int buttons_register(void)
 	struct device *device;
 	int ret;
 
+	// Un cdev permite bloquear open sin retener el mutex global de misc.
 	ret = alloc_chrdev_region(&buttons_dev, 0, 1, "buttons");
 	if (ret)
 		return ret;
@@ -284,6 +293,7 @@ static int buttons_init(void)
 {
 	int i, ret;
 
+	// Reserva las entradas GPIO y asocia cada una a su interrupción.
 	sema_init(&buttons_open_sem, 1);
 	for (i = 0; i < ARRAY_SIZE(buttons); i++) {
 		ret = gpio_request_one(buttons[i].gpio, GPIOF_IN,
@@ -353,6 +363,7 @@ static int __init driver_rpi_init(void)
 	pr_info("driver_rpi: cargado\n");
 	return 0;
 
+// Si falla la carga, libera solo los recursos que ya se habían adquirido.
 deregister_speaker:
 	misc_deregister(&speaker_device);
 deregister_leds:
@@ -371,6 +382,7 @@ static void __exit driver_rpi_exit(void)
 {
 	int i;
 
+	// Retira los dispositivos y detiene las IRQ antes de liberar los GPIO.
 	buttons_unregister();
 	misc_deregister(&speaker_device);
 	misc_deregister(&leds_device);
