@@ -1,16 +1,3 @@
-Notas de Salvador (19-nov-2026), para Manuel:
-  - Revisados tus cambios: el cdev para /dev/buttons es correcto
-    (misc_open retiene el mutex global de misc mientras llama a open).
-    instalar.sh y este documento, revisados: sin problemas.
-  - Añadido en driver_rpi.c: class_create() con y sin THIS_MODULE según
-    la versión del kernel. Desde el 6.4 no lleva THIS_MODULE. Si la
-    Raspberry usa un kernel anterior (el material del profesor enlaza
-    rpi-6.1), sin esto no compilaría.
-  - .gitignore: ignora cualquier .zip.
-  - Pendiente: probar en la Raspberry en clase y subir el ZIP
-    (el campus cierra el 1-dic a las 00:00).
-  - Si una pulsación cuenta doble: bash instalar.sh debounce_ms=200
-
 Comprobación del sistema y del driver
 
 Ejecutar en la Raspberry Pi. Los resultados indicados son los esperados.
@@ -106,11 +93,17 @@ No se esperan mensajes de pulsaciones ni de sonido en dmesg.
 
 Comprobar apertura exclusiva:
 
-  sudo ./lee_buttons dos
+Desde la carpeta con el ejecutable, en la misma terminal:
 
-Se crean dos procesos con PID distintos. Uno lee cinco pulsaciones;
-el otro espera para abrir. Cuando el primero cierra, el segundo puede
-leer sus cinco pulsaciones. No deben repartirse las lecturas entre ambos.
+  sudo -v
+  sudo -n ./lee_buttons &
+  sudo -n ./lee_buttons &
+  wait
+
+Se ejecutan dos lectores independientes con PID distintos. Uno lee cinco
+pulsaciones; el otro espera para abrir. Cuando el primero cierra, el
+segundo lee sus cinco pulsaciones. No deben repartirse las lecturas.
+También se puede ejecutar sudo ./lee_buttons en dos terminales distintas.
 
 Comprobar espera e interrupción, sin la aplicación anterior abierta:
 

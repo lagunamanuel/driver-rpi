@@ -1,6 +1,7 @@
 Driver de la placa auxiliar Raspberry Pi - Manuel Laguna Martínez y Salvador Bustamante Garnica
 
 Módulo de kernel que controla seis LEDs, un altavoz y dos botones.
+Placa: Raspberry Pi 2, kernel 6.6.51+rpt-rpi-v7, base GPIO 512.
 
 Ficheros:
   driver_rpi.c  Código del controlador.

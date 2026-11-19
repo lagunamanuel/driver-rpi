@@ -13,7 +13,6 @@
 #include <linux/semaphore.h>
 #include <linux/spinlock.h>
 #include <linux/uaccess.h>
-#include <linux/version.h>
 #include <linux/wait.h>
 
 // Base que se suma al número BCM de cada pin.
@@ -38,6 +37,7 @@ static ssize_t leds_read(struct file *file, char __user *buf,
 	state = leds_state;
 	mutex_unlock(&leds_mutex);
 
+	// Entrega un byte y devuelve EOF cuando ya se ha leído.
 	return simple_read_from_buffer(buf, count, ppos, &state, 1);
 }
 
@@ -132,6 +132,7 @@ static struct button buttons[] = {
 	{ .gpio = GPIO_BASE + 3, .key = '2' },
 };
 
+// El spinlock protege la FIFO; el mutex evita que dos lecturas consuman lo mismo.
 static DEFINE_KFIFO(buttons_fifo, char, 64);
 static DEFINE_SPINLOCK(buttons_lock);
 static DEFINE_MUTEX(buttons_read_mutex);
@@ -165,6 +166,7 @@ static irqreturn_t button_irq(int irq, void *dev_id)
 	if (time_before(now, button->last_press + msecs_to_jiffies(debounce_ms)))
 		return IRQ_HANDLED;
 	button->last_press = now;
+	// El trabajo restante se realiza en button_thread.
 	return IRQ_WAKE_THREAD;
 }
 
@@ -211,6 +213,7 @@ static ssize_t buttons_read(struct file *file, char __user *buf,
 		return -ERESTARTSYS;
 	}
 
+	// Sin O_NONBLOCK, espera una pulsación o una señal si la FIFO está vacía.
 	if (file->f_flags & O_NONBLOCK) {
 		if (!buttons_peek(&key)) {
 			ret = -EAGAIN;
@@ -261,12 +264,7 @@ static int buttons_register(void)
 	ret = cdev_add(&buttons_cdev, buttons_dev, 1);
 	if (ret)
 		goto unregister_region;
-	// class_create() perdió el parámetro THIS_MODULE en el kernel 6.4.
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
 	buttons_class = class_create("driver_rpi");
-#else
-	buttons_class = class_create(THIS_MODULE, "driver_rpi");
-#endif
 	if (IS_ERR(buttons_class)) {
 		ret = PTR_ERR(buttons_class);
 		goto delete_cdev;
@@ -310,6 +308,7 @@ static int buttons_init(void)
 		if (ret < 0)
 			goto free_current;
 		buttons[i].irq = ret;
+		// Permite aceptar la primera pulsación sin una espera inicial.
 		buttons[i].last_press = jiffies - msecs_to_jiffies(debounce_ms);
 		ret = request_threaded_irq(buttons[i].irq, button_irq, button_thread,
 					   IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
@@ -334,6 +333,7 @@ static void buttons_cleanup(void)
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(buttons); i++) {
+		// free_irq espera a que terminen el manejador y su hilo.
 		free_irq(buttons[i].irq, &buttons[i]);
 		gpio_free(buttons[i].gpio);
 	}
